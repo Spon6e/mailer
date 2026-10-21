@@ -1,0 +1,5 @@
+build/
+build_ascii/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
