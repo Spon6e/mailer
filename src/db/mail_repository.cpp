@@ -113,17 +113,82 @@ bool MailRepository::ensureSchema()
 
 bool MailRepository::seedDemoData()
 {
+    char* errMsg = nullptr;
+
     const char* demoDataRecipients =
         "INSERT INTO recipients(name, email)"
-        "VALUE ('Danil', 'asusmemp10@gmail.com');";
+        "VALUES (?, ?);";
 
     const char* demoDataTemplates =
         "INSERT INTO templates(nameTemplates, subject, body)"
-        "VALUE ('Seedlings', 'Hello', '');";
+        "VALUES (?, ?, ?);";
 
     const char* demoDataMail_queue =
-        "INSERT INTO mail_queue(name, email)"
-        "VALUE ('Danil', 'asusmemp10@gmail.com');";
+        "INSERT INTO mail_queue(recipient_id, template_id)"
+        "VALUES (?, ?);";
+
+    if(sqlite3_exec(databaseHandle_, "BEGIN", nullptr, nullptr, &errMsg) != SQLITE_OK){
+        fprintf(stderr, "error start demoData programm: %s\n", errMsg);
+        sqlite3_free(errMsg); //хрень именно от sqlite3, для очистки памяти
+        return false;
+    }
+
+    const std::string rec = "recipients";
+    std::initializer_list<std::pair<int,const char*>> demoDataR = {{0,"Danil"}, {0,"asusmemp10@gmail.com"}};
+
+    const std::string temp = "templates";
+    std::initializer_list<std::pair<int,const char*>> demoDataT = {{0, "12"}, {0, "Привет"}, {0, "Спам рассылка просто"}};
+
+
+
+
+    switch(countRecord(rec)){
+    case -1:
+        return false;
+    case 0:
+        if(!dataTransmission(demoDataRecipients, demoDataR))
+            return false;
+        break;
+    default:
+        break;
+    }
+
+    const int countRec = countRecord(rec);
+
+    switch(countRecord(temp)){
+    case -1:
+        return false;
+    case 0:
+        if(!dataTransmission(demoDataTemplates, demoDataT))
+            return false;
+        break;
+    default:
+        break;
+    }
+
+    const int countTemp = countRecord(temp);
+
+
+    const std::string mail = "mail_queue";
+    std::initializer_list<std::pair<int,const char*>> demoDataM = {{1, std::to_string(countRec).c_str()}, {1, std::to_string(countTemp).c_str()}};
+
+    switch(countRecord(mail)){
+    case -1:
+        return false;
+    case 0:
+        if(!dataTransmission(demoDataMail_queue, demoDataM))
+            return false;
+        break;
+    default:
+        break;
+    }
+
+    if (sqlite3_exec(databaseHandle_, "COMMIT", nullptr, nullptr, &errMsg) != SQLITE_OK){
+        fprintf(stderr, "error commit demoData programm: %s\n", errMsg);
+        sqlite3_free(errMsg);
+        rollback();
+        return false;
+    }
     // TODO(задание 2.5): добавь демонстрационные данные только в пустую БД.
     //
     // Используй sqlite3_prepare_v2(), sqlite3_bind_text(),
@@ -132,7 +197,7 @@ bool MailRepository::seedDemoData()
     //
     // Три INSERT должны быть одной транзакцией: BEGIN, INSERT x3, COMMIT.
     // При любой ошибке нужен ROLLBACK.
-    return false;
+    return true;
 }
 
 std::vector<domain::MailTask> MailRepository::pendingTasks() const
@@ -161,5 +226,77 @@ bool MailRepository::execute(std::string_view sql) const
     (void)sql;
     return false;
 }
+
+void MailRepository::rollback()
+{
+    char* errMsg = nullptr;
+    sqlite3_exec(databaseHandle_, "ROLLBACK", nullptr, nullptr, &errMsg);
+    if(errMsg)
+        sqlite3_free(errMsg);
+}
+
+bool MailRepository::dataTransmission(const char *data, std::initializer_list<std::pair<int, const char *> > fieldsData)
+{
+    sqlite3_stmt* stmt = nullptr; //указатель на подготовленный оператор
+    if (sqlite3_prepare_v2(databaseHandle_, data, -1, &stmt, nullptr) != SQLITE_OK){
+        fprintf(stderr, "NO insert data in table: %s\n", sqlite3_errmsg(databaseHandle_));
+        rollback();
+        return false;
+    }
+    int counter = 0;
+    for (auto i = fieldsData.begin(); i < fieldsData.end(); ++i){
+        if(i->first == 1){
+            if(sqlite3_bind_int(stmt, ++counter, std::stoi(i->second)) != SQLITE_OK){
+                fprintf(stderr, "NO insert data in table: %s\n", sqlite3_errmsg(databaseHandle_));
+                rollback();
+                sqlite3_finalize(stmt);
+                return false;
+            }
+        }
+        else{
+            if(sqlite3_bind_text(stmt, ++counter, i->second, -1, SQLITE_TRANSIENT) != SQLITE_OK){
+                fprintf(stderr, "NO insert data in table: %s\n", sqlite3_errmsg(databaseHandle_));
+                rollback();
+                sqlite3_finalize(stmt);
+                return false;
+            }
+        }
+    }
+    if (sqlite3_step(stmt) != SQLITE_DONE){
+        fprintf(stderr, "NO step insert data in table: %s\n", sqlite3_errmsg(databaseHandle_));
+        sqlite3_finalize(stmt);
+        rollback();
+        return false;
+    }
+    sqlite3_finalize(stmt);
+    return true;
+}
+
+int count_callback(void *data, int argc, char **argv, char **azColName)
+{
+    int *result = static_cast<int*>(data);
+    if(argc > 0 && argv[0]){
+        *result = std::atoi(argv[0]);
+    }
+    return 0;
+}
+
+int MailRepository::countRecord(const std::string &table_name)
+{
+    int count = 0;
+    char *errorMsg = nullptr;
+
+    const char* requestCountData = sqlite3_mprintf("SELECT COUNT(*) FROM %q", table_name.c_str());
+    if(sqlite3_exec(databaseHandle_, requestCountData, count_callback, &count, &errorMsg) != SQLITE_OK){
+        fprintf(stderr, "Error request count: %s\n", errorMsg);
+        sqlite3_free(const_cast<char*>(requestCountData));
+        sqlite3_free(errorMsg);
+        return -1;
+    }
+    sqlite3_free(const_cast<char*>(requestCountData));
+    return count;
+}
+
+
 
 } // namespace mailer::db

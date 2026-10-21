@@ -35,10 +35,17 @@ private:
 
     std::string databasePath_;
 
+    void rollback();
+
+    bool dataTransmission(const char* data, std::initializer_list<std::pair<int, const char*>> fieldsData);
+
+    int countRecord(const std::string &table_name);
     // TODO(задание 2.1): добавь сюда SQLite-дескриптор после подключения
     // библиотеки sqlite3. Обычно это sqlite3*, которым владеет репозиторий.
     // Не передавай этот указатель между потоками.
     sqlite3* databaseHandle_ = nullptr;
 };
+
+
 
 } // namespace mailer::db
