@@ -30,10 +30,7 @@ bool MailRepository::open()
 {
     if(sqlite3_open(databasePath_.c_str(), &databaseHandle_) == SQLITE_OK){
         sqlite3_busy_timeout(databaseHandle_, 5000);
-        char* errorMsg = nullptr;
-        if (sqlite3_exec(databaseHandle_, "PRAGMA foreign_keys = ON", nullptr, nullptr, &errorMsg) != SQLITE_OK){
-            fprintf(stderr, "Pragma error: %s\n", errorMsg);
-            sqlite3_free(errorMsg);
+        if (!execute("PRAGMA foreign_keys = ON")) {
             return false;
         }
         return true;
@@ -80,23 +77,14 @@ bool MailRepository::ensureSchema()
         "FOREIGN KEY (recipient_id) REFERENCES recipients(id),"
         "FOREIGN KEY (template_id) REFERENCES templates(id));";
 
-    char* errMsg = nullptr;
-
-    bool cool = true;
-    if(sqlite3_exec(databaseHandle_, createTableRecipients, nullptr, nullptr, &errMsg) != SQLITE_OK){
-        fprintf(stderr, "NO CREATE users: %s\n", errMsg);
-        sqlite3_free(errMsg);
-        cool = false;
+    if(!execute(createTableRecipients)){
+        return false;
     }
-    if(sqlite3_exec(databaseHandle_, createTableTemplates, nullptr, nullptr, &errMsg) != SQLITE_OK){
-        fprintf(stderr, "NO CREATE templates: %s\n", errMsg);
-        sqlite3_free(errMsg);
-        cool = false;
+    if(!execute(createTableTemplates)){
+        return false;
     }
-    if(sqlite3_exec(databaseHandle_, createTableMail_queue, nullptr, nullptr, &errMsg) != SQLITE_OK){
-        fprintf(stderr, "NO CREATE mail_queue: %s\n", errMsg);
-        sqlite3_free(errMsg);
-        cool = false;
+    if(!execute(createTableMail_queue)){
+        return false;
     }
     // TODO(задание 2.4): создай таблицы recipients, templates и mail_queue
     // через sqlite3_exec() или подготовленные DDL-запросы.
@@ -108,7 +96,7 @@ bool MailRepository::ensureSchema()
     //
     // Добавь PRIMARY KEY, UNIQUE для email, FOREIGN KEY и DEFAULT status.
     // Не игнорируй код возврата SQLite.
-    return cool;
+    return true;
 }
 
 bool MailRepository::seedDemoData()
@@ -311,11 +299,21 @@ bool MailRepository::markSent(std::int64_t taskId)
 
 bool MailRepository::execute(std::string_view sql) const
 {
+    if(databaseHandle_ == nullptr){
+        return false;
+    }
+    const std::string request(sql);
+    char* errorMsg = nullptr;
+
+    if(sqlite3_exec(databaseHandle_, request.c_str(), nullptr, nullptr, &errorMsg) != SQLITE_OK){
+        fprintf(stderr, "SQLite error: %s\n", errorMsg);
+        sqlite3_free(errorMsg);
+        return false;
+    }
     // TODO(задание 2.8): реализуй вспомогательный метод для DDL/PRAGMA.
     // sqlite3_exec() может вернуть текст ошибки через char*. Не забудь
     // освободить его sqlite3_free().
-    (void)sql;
-    return false;
+    return true;
 }
 
 void MailRepository::rollback()

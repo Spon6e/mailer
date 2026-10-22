@@ -17,7 +17,7 @@ struct SendResult final
     SendStatus status = SendStatus::Failed;
     std::string errorMessage;
 
-    [[nodiscard]] bool isSuccess() const noexcept
+    [[nodiscard]] bool isSuccess() const noexcept //Если мы не будем запоминать рез функции то вылезет ошибка
     {
         return status == SendStatus::Success;
     }
