@@ -140,10 +140,9 @@ bool MailRepository::seedDemoData()
     std::initializer_list<std::pair<int,const char*>> demoDataT = {{0, "12"}, {0, "Привет"}, {0, "Спам рассылка просто"}};
 
 
-
-
     switch(countRecord(rec)){
     case -1:
+        rollback();
         return false;
     case 0:
         if(!dataTransmission(demoDataRecipients, demoDataR))
@@ -157,6 +156,7 @@ bool MailRepository::seedDemoData()
 
     switch(countRecord(temp)){
     case -1:
+        rollback();
         return false;
     case 0:
         if(!dataTransmission(demoDataTemplates, demoDataT))
@@ -168,12 +168,14 @@ bool MailRepository::seedDemoData()
 
     const int countTemp = countRecord(temp);
 
-
+    const std::string strCountRec = std::to_string(countRec);
+    const std::string strCountTemp = std::to_string(countTemp);
     const std::string mail = "mail_queue";
-    std::initializer_list<std::pair<int,const char*>> demoDataM = {{1, std::to_string(countRec).c_str()}, {1, std::to_string(countTemp).c_str()}};
+    std::initializer_list<std::pair<int,const char*>> demoDataM = {{1, strCountRec.c_str()}, {1, strCountTemp.c_str()}};
 
     switch(countRecord(mail)){
     case -1:
+        rollback();
         return false;
     case 0:
         if(!dataTransmission(demoDataMail_queue, demoDataM))
@@ -202,20 +204,109 @@ bool MailRepository::seedDemoData()
 
 std::vector<domain::MailTask> MailRepository::pendingTasks() const
 {
+    std::vector<domain::MailTask> pendingTasks;
+
+    sqlite3_stmt* stmt = nullptr;
+
+    domain::MailTask data;
+    const char* searchWait = "SELECT u.id, u.name, u.email, l.subject, l.body, q.id"
+        " FROM mail_queue AS q"
+        " JOIN recipients AS u ON q.recipient_id = u.id"
+        " JOIN templates AS l ON q.template_id = l.id"
+        " WHERE q.status = 'pending' AND u.enabled = 1;";
+    if(sqlite3_prepare_v2(databaseHandle_, searchWait, -1, &stmt, nullptr) != SQLITE_OK){
+        fprintf(stderr, "We were unable to perform the search: %s\n", sqlite3_errmsg(databaseHandle_));
+        sqlite3_finalize(stmt);
+        return pendingTasks;
+    }
+
+    //ТУТ ИСПРАВИТЬ ХАРДКОД И БРАТЬ ДАННЫЕ ИЗ НАСТРОЕК
+    const char* currentEmail = "bikini.th@gmail.com";
+
+    int stepResult;
+    while ((stepResult = sqlite3_step(stmt)) == SQLITE_ROW) {
+        const std::int64_t id_user = sqlite3_column_int64(stmt, 0);
+        const char* name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        const char* email = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        const char* subject = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        const char* body = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+        data.id = sqlite3_column_int64(stmt, 5);
+        data.message.body = body;
+        data.message.subject = subject;
+        data.message.from = currentEmail;
+        data.message.recipient.email = email;
+        data.message.recipient.name = name;
+        data.message.recipient.id = id_user;
+        pendingTasks.push_back(data);
+    }
+    if (stepResult != SQLITE_DONE){
+        fprintf(stderr, "BAD ENDING STEPS: %s\n", sqlite3_errmsg(databaseHandle_));
+    }
+    sqlite3_finalize(stmt);
     // TODO(задание 2.6): выполни JOIN-запрос очереди.
     //
     // Выбери pending-задачи только для enabled-получателей. Значения доставай
     // через sqlite3_column_* и копируй в std::string/std::vector.
     // Обязательно вызови sqlite3_finalize() на всех путях выхода.
-    return {};
+    return pendingTasks;
 }
 
 bool MailRepository::markSent(std::int64_t taskId)
 {
+    const char* updatingStatus = "UPDATE mail_queue"
+        " SET status = ?, sent_at = CURRENT_TIMESTAMP"
+        " WHERE id = ?;";
+    sqlite3_stmt* stmt = nullptr;
+
+    char* errMsg = nullptr;
+    if(sqlite3_exec(databaseHandle_, "BEGIN", nullptr, nullptr, &errMsg) != SQLITE_OK){
+        fprintf(stderr, "error start update programm: %s\n", errMsg);
+        sqlite3_free(errMsg);
+        return false;
+    }
+
+    if(sqlite3_prepare_v2(databaseHandle_, updatingStatus, -1, &stmt, nullptr) != SQLITE_OK){
+        fprintf(stderr, "NO UPDATE data in table: %s\n", sqlite3_errmsg(databaseHandle_));
+        rollback();
+        sqlite3_finalize(stmt);
+        return false;
+    }
+    const char* sent = "sent";
+    if (sqlite3_bind_text(stmt, 1, sent, -1, SQLITE_TRANSIENT) != SQLITE_OK){
+        fprintf(stderr, "NO UPDATE status in table: %s\n", sqlite3_errmsg(databaseHandle_));
+        rollback();
+        sqlite3_finalize(stmt);
+        return false;
+    }
+    if(sqlite3_bind_int64(stmt, 2, taskId) != SQLITE_OK){
+        fprintf(stderr, "NO UPDATE status in table, because bad ID: %s\n", sqlite3_errmsg(databaseHandle_));
+        rollback();
+        sqlite3_finalize(stmt);
+        return false;
+    }
+    if (sqlite3_step(stmt) != SQLITE_DONE){
+        fprintf(stderr, "BAD STEP: %s\n", sqlite3_errmsg(databaseHandle_));
+        sqlite3_finalize(stmt);
+        rollback();
+        return false;
+    }
+    if(sqlite3_changes(databaseHandle_) != 1){
+        fprintf(stderr, "NO updates: %s\n", sqlite3_errmsg(databaseHandle_));
+        sqlite3_finalize(stmt);
+        rollback();
+        return false;
+    }
+    if (sqlite3_exec(databaseHandle_, "COMMIT", nullptr, nullptr, &errMsg) != SQLITE_OK){
+        fprintf(stderr, "error commit update programm: %s\n", errMsg);
+        sqlite3_free(errMsg);
+        rollback();
+        sqlite3_finalize(stmt);
+        return false;
+    }
+    sqlite3_finalize(stmt);
     // TODO(задание 2.7): параметризованным UPDATE переведи задачу в sent.
     // Запиши время в UTC и проверь sqlite3_changes() == 1.
-    (void)taskId;
-    return false;
+    return true;
 }
 
 bool MailRepository::execute(std::string_view sql) const
@@ -272,7 +363,7 @@ bool MailRepository::dataTransmission(const char *data, std::initializer_list<st
     return true;
 }
 
-int count_callback(void *data, int argc, char **argv, char **azColName)
+int count_callback(void *data, int argc, char **argv, char **)
 {
     int *result = static_cast<int*>(data);
     if(argc > 0 && argv[0]){
