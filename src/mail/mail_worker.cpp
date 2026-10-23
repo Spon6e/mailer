@@ -4,6 +4,8 @@
 #include "domain/template_renderer.h"
 
 #include <utility>
+#include <cassert>
+#include <iostream>
 
 namespace mailer::mail {
 
@@ -11,6 +13,7 @@ MailWorker::MailWorker(std::string databasePath, std::unique_ptr<IMailSender> se
     : databasePath_(std::move(databasePath))
     , sender_(std::move(sender))
 {
+    assert(sender_ != nullptr);
     // TODO(задание 4.1): добавь проверку предусловий.
     // sender_ не должен быть nullptr. Реши, использовать ли assert,
     // исключение std::invalid_argument или другой вариант.
@@ -18,6 +21,31 @@ MailWorker::MailWorker(std::string databasePath, std::unique_ptr<IMailSender> se
 
 void MailWorker::process()
 {
+    try{
+        std::string databasePath = "C:/Users/Данил/Documents/Codex/2026-10-19/new-chat/outputs/auto-mailer";
+
+        db::MailRepository reposit(databasePath);
+        if(!reposit.open()){
+            throw errorForMe("Ошибка открытия БД");
+        }
+        if(!reposit.ensureSchema()){
+            throw errorForMe("Ошибка создания таблиц БД");
+        }
+        std::vector<domain::MailTask> myVec = reposit.pendingTasks();
+        if(myVec.empty()){
+            throw errorForMe("Ошибка получения данных из таблиц, возможно они пустые");
+        }
+
+        const std::string name = "name";
+        const std::string email = "email";
+
+        //domain::TemplateRenderer<domain::TemplateContext> temp(,domain::TemplateContext)
+    }
+    catch(errorForMe & error){
+        std::cout << error.what() << std::endl;
+        return;
+    }
+
     // TODO(задание 4.2): реализуй полный цикл обработки очереди.
     //
     // ВАЖНО: этот метод вызывается из std::thread. Репозиторий и SQLite-

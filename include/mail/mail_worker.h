@@ -22,4 +22,12 @@ private:
     std::unique_ptr<IMailSender> sender_;
 };
 
+class errorForMe{
+    std::string err;
+public:
+    errorForMe(std::string er): err(er){}
+    std::string what(){
+        return err;
+    }
+};
 } // namespace mailer::mail
