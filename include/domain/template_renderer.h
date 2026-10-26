@@ -22,8 +22,7 @@ public:
     //Запрещает неявное преобразование
     explicit TemplateRenderer(Resolver resolver)
         : resolver_(std::move(resolver))
-    {
-    }
+    {}
 
     std::string render(const std::string& source, const Context& context) const
     {

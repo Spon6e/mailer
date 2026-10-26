@@ -22,9 +22,7 @@ MailWorker::MailWorker(std::string databasePath, std::unique_ptr<IMailSender> se
 void MailWorker::process()
 {
     try{
-        std::string databasePath = "C:/Users/Данил/Documents/Codex/2026-10-19/new-chat/outputs/auto-mailer";
-
-        db::MailRepository reposit(databasePath);
+        db::MailRepository reposit(databasePath_);
         if(!reposit.open()){
             throw errorForMe("Ошибка открытия БД");
         }
@@ -33,15 +31,43 @@ void MailWorker::process()
         }
         std::vector<domain::MailTask> myVec = reposit.pendingTasks();
         if(myVec.empty()){
-            throw errorForMe("Ошибка получения данных из таблиц, возможно они пустые");
+            std::cout << "Список задач пуст" << std::endl;
+            return;
         }
 
-        const std::string name = "name";
-        const std::string email = "email";
+        domain::TemplateContext dataPerson;
+        domain::TemplateRenderer<domain::TemplateContext> upgrader([](const domain::TemplateContext& a, std::string_view b){
+            if(b == "name"){
+                return a.recipientName;
+            }
+            if(b == "email"){
+                return a.recipientEmail;
+            }
+            return std::string{};
+        });
 
-        //domain::TemplateRenderer<domain::TemplateContext> temp(,domain::TemplateContext)
+        for(auto i = myVec.begin(); i != myVec.end(); ++i){
+            dataPerson.recipientEmail = i->message.recipient.email;
+            dataPerson.recipientName = i->message.recipient.name;
+            domain::EmailMessage SMS = i->message;
+            SMS.body = upgrader.render(i->message.body, dataPerson);
+            SMS.subject = upgrader.render(i->message.subject, dataPerson);
+            if(!sender_->send(SMS).isSuccess()){
+                std::cout << "Ошибка отправки сообщения пользователю: " << dataPerson.recipientName << ", email: " << dataPerson.recipientEmail << std::endl;
+                continue;
+            }
+            else{
+                if(!reposit.markSent(i->id)){
+                    std::cout << "Ошибка обновления статуса пользователю: " << dataPerson.recipientName << ", email: " << dataPerson.recipientEmail << std::endl;
+                    continue;
+                }
+            }
+            std::cout << "Задача успешно обработана. Пользователь: " << dataPerson.recipientName << ", email: " << dataPerson.recipientEmail << std::endl;
+        }
+
+        return;
     }
-    catch(errorForMe & error){
+    catch(const errorForMe & error){
         std::cout << error.what() << std::endl;
         return;
     }

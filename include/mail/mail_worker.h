@@ -26,7 +26,7 @@ class errorForMe{
     std::string err;
 public:
     errorForMe(std::string er): err(er){}
-    std::string what(){
+    std::string what() const {
         return err;
     }
 };
