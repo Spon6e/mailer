@@ -8,9 +8,7 @@ namespace mailer::db {
 MailRepository::MailRepository(std::string databasePath)
     : databasePath_(std::move(databasePath))
 {
-    // TODO(задание 2.1): подключи sqlite3.h в этом .cpp и реализуй открытие
-    // соединения в методе open(). Сам указатель databaseHandle_ уже объявлен
-    // как sqlite3* без зависимости от Qt.
+
 }
 
 MailRepository::~MailRepository()
@@ -19,11 +17,6 @@ MailRepository::~MailRepository()
         sqlite3_close(databaseHandle_);
         databaseHandle_ = nullptr;
     }
-    // TODO(задание 2.2): если databaseHandle_ не nullptr, вызови
-    // sqlite3_close(databaseHandle_). После этого обнули указатель.
-    //
-    // В будущем здесь нужно будет проверить, что все подготовленные
-    // sqlite3_stmt уже освобождены через sqlite3_finalize().
 }
 
 bool MailRepository::open()
@@ -39,15 +32,6 @@ bool MailRepository::open()
         fprintf(stderr, "NO OPEN database: %s\n", sqlite3_errmsg(databaseHandle_));
         return false;
     }
-
-    // TODO(задание 2.3): реализуй открытие SQLite-базы.
-    //
-    // 1. Добавь в CMake зависимость от SQLite3.
-    // 2. Подключи <sqlite3.h> только в .cpp-файле.
-    // 3. Вызови sqlite3_open(databasePath_.c_str(), &databaseHandle_).
-    // 4. Проверь код возврата и выведи sqlite3_errmsg() при ошибке.
-    // 5. Настрой sqlite3_busy_timeout().
-    // 6. Реши, нужен ли PRAGMA foreign_keys = ON, и включи его.
 }
 
 bool MailRepository::ensureSchema()
@@ -86,16 +70,6 @@ bool MailRepository::ensureSchema()
     if(!execute(createTableMail_queue)){
         return false;
     }
-    // TODO(задание 2.4): создай таблицы recipients, templates и mail_queue
-    // через sqlite3_exec() или подготовленные DDL-запросы.
-    //
-    // Минимальная схема:
-    // recipients(id, name, email, enabled)
-    // templates(id, name, subject, body)
-    // mail_queue(id, recipient_id, template_id, status, created_at, sent_at)
-    //
-    // Добавь PRIMARY KEY, UNIQUE для email, FOREIGN KEY и DEFAULT status.
-    // Не игнорируй код возврата SQLite.
     return true;
 }
 
@@ -179,14 +153,6 @@ bool MailRepository::seedDemoData()
         rollback();
         return false;
     }
-    // TODO(задание 2.5): добавь демонстрационные данные только в пустую БД.
-    //
-    // Используй sqlite3_prepare_v2(), sqlite3_bind_text(),
-    // sqlite3_step() и sqlite3_finalize(). Не склеивай SQL со строками
-    // пользователя.
-    //
-    // Три INSERT должны быть одной транзакцией: BEGIN, INSERT x3, COMMIT.
-    // При любой ошибке нужен ROLLBACK.
     return true;
 }
 
@@ -231,11 +197,6 @@ std::vector<domain::MailTask> MailRepository::pendingTasks() const
         fprintf(stderr, "BAD ENDING STEPS: %s\n", sqlite3_errmsg(databaseHandle_));
     }
     sqlite3_finalize(stmt);
-    // TODO(задание 2.6): выполни JOIN-запрос очереди.
-    //
-    // Выбери pending-задачи только для enabled-получателей. Значения доставай
-    // через sqlite3_column_* и копируй в std::string/std::vector.
-    // Обязательно вызови sqlite3_finalize() на всех путях выхода.
     return pendingTasks;
 }
 
@@ -292,8 +253,6 @@ bool MailRepository::markSent(std::int64_t taskId)
         return false;
     }
     sqlite3_finalize(stmt);
-    // TODO(задание 2.7): параметризованным UPDATE переведи задачу в sent.
-    // Запиши время в UTC и проверь sqlite3_changes() == 1.
     return true;
 }
 
@@ -310,9 +269,6 @@ bool MailRepository::execute(std::string_view sql) const
         sqlite3_free(errorMsg);
         return false;
     }
-    // TODO(задание 2.8): реализуй вспомогательный метод для DDL/PRAGMA.
-    // sqlite3_exec() может вернуть текст ошибки через char*. Не забудь
-    // освободить его sqlite3_free().
     return true;
 }
 
@@ -388,4 +344,4 @@ int MailRepository::countRecord(const std::string &table_name)
 
 
 
-} // namespace mailer::db
+}

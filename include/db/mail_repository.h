@@ -14,9 +14,6 @@ namespace mailer::db {
 class MailRepository final
 {
 public:
-    // TODO(задание 2): реализуй владение одним SQLite-соединением.
-    // Объект репозитория нельзя копировать: соединение должно принадлежать
-    // ровно одному экземпляру и использоваться только в создавшем его потоке.
     explicit MailRepository(std::string databasePath);
     ~MailRepository();
 
@@ -40,9 +37,6 @@ private:
     bool dataTransmission(const char* data, std::initializer_list<std::pair<int, const char*>> fieldsData);
 
     int countRecord(const std::string &table_name);
-    // TODO(задание 2.1): добавь сюда SQLite-дескриптор после подключения
-    // библиотеки sqlite3. Обычно это sqlite3*, которым владеет репозиторий.
-    // Не передавай этот указатель между потоками.
     sqlite3* databaseHandle_ = nullptr;
 };
 

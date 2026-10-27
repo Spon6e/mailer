@@ -26,10 +26,6 @@ struct SendResult final
 class IMailSender
 {
 public:
-    // TODO(задание 3): создай реализацию интерфейса для dry-run, а позже —
-    // отдельную реализацию настоящего SMTP/API-отправителя.
-    // Виртуальный деструктор нужен, потому что объект будет удаляться через
-    // указатель на базовый класс.
     virtual ~IMailSender() = default;
     virtual SendResult send(const domain::EmailMessage& message) = 0;
 };
